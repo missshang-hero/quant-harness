@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any
+
+from packages.python.core.models import StockSnapshot
 from packages.python.data.real_collectors import load_market_data
 from packages.python.portfolio_allocator import build_portfolio_plan
 from packages.python.reports.daily import build_daily_report
@@ -11,8 +14,16 @@ from packages.python.strategies.resonance import build_theme_heat_map
 from packages.python.strategies.sentiment import compute_market_overview
 
 
-def run_pipeline(limit: int = 50, persist: bool = False, include_portfolio: bool = True):
-    stocks, meta = load_market_data(limit=limit)
+def run_pipeline(
+    limit: int = 50,
+    persist: bool = False,
+    include_portfolio: bool = True,
+    portfolio_history: bool = True,
+    stocks: list[StockSnapshot] | None = None,
+    meta: dict[str, Any] | None = None,
+):
+    if stocks is None or meta is None:
+        stocks, meta = load_market_data(limit=limit)
     trade_date = meta["trade_date"]
     market = compute_market_overview(stocks, trade_date)
     theme_heat = build_theme_heat_map(stocks)
@@ -21,7 +32,11 @@ def run_pipeline(limit: int = 50, persist: bool = False, include_portfolio: bool
     signals = sorted(leader_signals + hotmoney_signals, key=lambda s: (s.resonance_score, s.score), reverse=True)
     signal_dicts = [s.model_dump() for s in signals]
     candidates = aggregate_signal_candidates(signal_dicts)
-    portfolio_plan = build_portfolio_plan(market.model_dump(), candidates) if include_portfolio else None
+    portfolio_plan = build_portfolio_plan(
+        market.model_dump(),
+        candidates,
+        use_history=portfolio_history,
+    ) if include_portfolio else None
     report = build_daily_report(trade_date, market, signals)
 
     payload = {

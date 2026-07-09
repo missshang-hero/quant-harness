@@ -41,6 +41,16 @@ app.add_middleware(
 )
 
 
+def _paper_summary_payload(payload, market_stocks):
+    portfolio = paper_portfolio_summary([s.model_dump() for s in market_stocks])
+    return {
+        **portfolio,
+        "portfolio": portfolio,
+        "plan": payload["portfolio_plan"],
+        "candidate_count": len(payload.get("candidates") or []),
+    }
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -97,12 +107,32 @@ def paper_trades(limit: int = 100):
 
 @app.get("/api/paper/summary")
 def paper_summary():
-    payload = run_pipeline()
-    market_stocks, _meta = load_market_data(limit=50)
+    market_stocks, market_meta = load_market_data(limit=50)
+    payload = run_pipeline(stocks=market_stocks, meta=market_meta, portfolio_history=False)
+    return _paper_summary_payload(payload, market_stocks)
+
+
+@app.get("/api/dashboard/overview")
+def dashboard_overview():
+    market_stocks, market_meta = load_market_data(limit=50)
+    payload = run_pipeline(stocks=market_stocks, meta=market_meta, portfolio_history=False)
+    theme_heat_payload = build_theme_heat_analysis(stocks=market_stocks, meta=market_meta)
     return {
-        "portfolio": paper_portfolio_summary([s.model_dump() for s in market_stocks]),
-        "plan": payload["portfolio_plan"],
-        "candidate_count": len(payload.get("candidates") or []),
+        "meta": payload["meta"],
+        "market": payload["market"],
+        "signals": payload["signals"],
+        "candidates": payload["candidates"],
+        "portfolio_plan": payload["portfolio_plan"],
+        "paper_summary": _paper_summary_payload(payload, market_stocks),
+        "paper_positions": list_paper_positions(),
+        "paper_trades": list_paper_trades(limit=100),
+        "report": payload["report"],
+        "runs": list_runs(limit=20),
+        "validations": list_validations(limit=50),
+        "performance": strategy_performance_summary(limit=500),
+        "theme_heat_meta": theme_heat_payload.get("meta"),
+        "theme_heat_methodology": theme_heat_payload.get("methodology"),
+        "theme_heat": theme_heat_payload.get("items") or [],
     }
 
 

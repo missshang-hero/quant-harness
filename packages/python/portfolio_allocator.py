@@ -16,7 +16,11 @@ STRATEGY_LABELS = {
 }
 
 
-def build_portfolio_plan(market: dict[str, Any], candidates: list[dict[str, Any]]) -> dict[str, Any]:
+def build_portfolio_plan(
+    market: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    use_history: bool = True,
+) -> dict[str, Any]:
     stage = market.get('market_sentiment_stage', 'ice')
 
     if stage == 'ice':
@@ -68,8 +72,24 @@ def build_portfolio_plan(market: dict[str, Any], candidates: list[dict[str, Any]
             '回避纯跟风和低共振标的。',
         ]
 
-    strategy_governor = build_strategy_governor(history_limit=200)
-    adaptive_profile = get_adaptive_parameter_profile(limit=160)
+    if use_history:
+        strategy_governor = build_strategy_governor(history_limit=200)
+        adaptive_profile = get_adaptive_parameter_profile(limit=160)
+    else:
+        strategy_governor = {
+            'history_signal_count': 0,
+            'trade_count': 0,
+            'enabled_strategies': enabled_strategies,
+            'frozen_strategies': [],
+            'items': [],
+            'notes': ['首页快速模式暂不运行历史回测治理。'],
+        }
+        adaptive_profile = {
+            'active_profile': 'fast_default',
+            'params': {},
+            'notes': ['首页快速模式使用默认参数。'],
+            'source': 'fast_dashboard',
+        }
     adaptive_params = adaptive_profile.get('params') or {}
     enabled_by_governor = set(strategy_governor.get('enabled_strategies') or enabled_strategies)
 
@@ -185,6 +205,16 @@ def build_portfolio_plan(market: dict[str, Any], candidates: list[dict[str, Any]
         'no_trade': no_trade,
         'notes': notes,
     }
+    if not use_history:
+        base_plan['risk_profile'] = {
+            'risk_mode': risk_mode,
+            'market_stage': stage,
+            'risk_discount': 1.0,
+            'cooldown': False,
+            'notes': ['快速组合模式已跳过重型历史回测，专门组合接口仍会生成完整风险画像。'],
+        }
+        return base_plan
+
     risk_profile = build_risk_profile(base_plan, plan_items)
     sized_plan = apply_position_sizing(base_plan, risk_profile)
     sized_plan['risk_profile'] = risk_profile

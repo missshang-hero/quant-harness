@@ -46,7 +46,7 @@ def _max_drawdown_pct(entry_price: float, rows: list[dict[str, Any]], bars: int 
     return round((trough / entry_price - 1) * 100, 2)
 
 
-def backtest_signals(limit: int = 200, kline_days: int = 30) -> dict[str, Any]:
+def _backtest_signals_uncached(limit: int = 200, kline_days: int = 30) -> dict[str, Any]:
     signal_rows = list_all_signal_details(limit=limit)
 
     trades: list[dict[str, Any]] = []
@@ -108,6 +108,14 @@ def backtest_signals(limit: int = 200, kline_days: int = 30) -> dict[str, Any]:
         'skipped': skipped,
         'errors': errors,
     }
+
+
+def backtest_signals(limit: int = 200, kline_days: int = 30) -> dict[str, Any]:
+    return get_or_compute(
+        f'backtest_signals:{limit}:{kline_days}',
+        lambda: _backtest_signals_uncached(limit=limit, kline_days=kline_days),
+        ttl_seconds=300.0,
+    )
 
 
 def _summarize_bucket(items: list[dict[str, Any]], key: str, value: str) -> dict[str, Any]:

@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from packages.python.analysis_cache import get_or_compute
 from packages.python.core.models import StockSnapshot
 from packages.python.data.sample_loader import load_sample_market
 
@@ -55,6 +56,25 @@ VALID_A_SHARE_PREFIXES = (
     '688',
 )
 
+MARKET_CACHE_TTL_SECONDS = 90.0
+EASTMONEY_TIMEOUT = httpx.Timeout(6.0, connect=2.0, read=4.0)
+CONCEPT_TIMEOUT_SECONDS = 1.5
+CONCEPT_SYMBOL_LIMIT = 8
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(0, int(os.getenv(name, str(default))))
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.getenv(name, str(default))))
+    except ValueError:
+        return default
+
 
 def infer_theme(name: str, symbol: str = '') -> str:
     text = f'{name}{symbol}'
@@ -100,6 +120,7 @@ def fetch_professional_concepts(symbol: str, client: httpx.Client) -> list[str]:
                 'User-Agent': 'Mozilla/5.0',
                 'Referer': 'https://quote.eastmoney.com/',
             },
+            timeout=CONCEPT_TIMEOUT_SECONDS,
         )
         res.raise_for_status()
         payload = res.json()
@@ -188,7 +209,7 @@ def try_fetch_with_eastmoney(limit: int = 50) -> tuple[list[StockSnapshot], str]
         'fields': 'f12,f14,f2,f3,f8,f10',
     }
     try:
-        with httpx.Client(timeout=10.0, headers={'User-Agent': 'Mozilla/5.0'}) as client:
+        with httpx.Client(timeout=EASTMONEY_TIMEOUT, headers={'User-Agent': 'Mozilla/5.0'}) as client:
             res = client.get(url, params=params)
             res.raise_for_status()
             payload = res.json()
@@ -211,7 +232,8 @@ def try_fetch_with_eastmoney(limit: int = 50) -> tuple[list[StockSnapshot], str]
                 )
 
             professional_concept_map: dict[str, list[str]] = {}
-            for symbol in symbols[: min(len(symbols), 20)]:
+            concept_limit = _env_int('MARKET_CONCEPT_SYMBOL_LIMIT', CONCEPT_SYMBOL_LIMIT)
+            for symbol in symbols[: min(len(symbols), concept_limit)]:
                 concepts = fetch_professional_concepts(symbol, client)
                 if concepts:
                     professional_concept_map[symbol] = concepts
@@ -222,8 +244,7 @@ def try_fetch_with_eastmoney(limit: int = 50) -> tuple[list[StockSnapshot], str]
         return [], 'eastmoney_unavailable'
 
 
-def load_market_data(limit: int = 50) -> tuple[list[StockSnapshot], dict[str, str]]:
-    provider_order = os.getenv('MARKET_DATA_PROVIDER_ORDER', 'eastmoney,akshare,sample')
+def _load_market_data_uncached(limit: int, provider_order: str) -> tuple[list[StockSnapshot], dict[str, str]]:
     providers = [item.strip().lower() for item in provider_order.split(',') if item.strip()]
 
     for provider in providers:
@@ -240,3 +261,14 @@ def load_market_data(limit: int = 50) -> tuple[list[StockSnapshot], dict[str, st
             return stocks, {'source': source, 'trade_date': str(date.today())}
 
     return load_sample_market(), {'source': 'sample_fallback', 'trade_date': str(date.today())}
+
+
+def load_market_data(limit: int = 50) -> tuple[list[StockSnapshot], dict[str, str]]:
+    provider_order = os.getenv('MARKET_DATA_PROVIDER_ORDER', 'eastmoney,akshare,sample')
+    ttl_seconds = _env_float('MARKET_DATA_CACHE_TTL_SECONDS', MARKET_CACHE_TTL_SECONDS)
+    cache_key = f'market_data:{limit}:{provider_order}'
+    return get_or_compute(
+        cache_key,
+        lambda: _load_market_data_uncached(limit=limit, provider_order=provider_order),
+        ttl_seconds=ttl_seconds,
+    )

@@ -127,8 +127,14 @@ def _classify_heat_stage(
     return "退潮观察"
 
 
-def build_theme_heat_analysis(limit: int = 10, market_limit: int = 50) -> dict[str, Any]:
-    stocks, meta = load_market_data(limit=market_limit)
+def build_theme_heat_analysis(
+    limit: int = 10,
+    market_limit: int = 50,
+    stocks: list[StockSnapshot] | None = None,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if stocks is None or meta is None:
+        stocks, meta = load_market_data(limit=market_limit)
     market = compute_market_overview(stocks, meta["trade_date"])
     counter: Counter[str] = Counter()
     score_map: dict[str, float] = {}

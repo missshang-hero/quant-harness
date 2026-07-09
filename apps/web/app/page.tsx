@@ -76,6 +76,24 @@ type ThemeHeatPayload = {
   items?: ApiRecord[]
 }
 
+type DashboardOverviewPayload = {
+  meta?: ApiRecord | null
+  market?: ApiRecord | null
+  signals?: ApiRecord[]
+  candidates?: ApiRecord[]
+  portfolio_plan?: ApiRecord | null
+  paper_summary?: ApiRecord | null
+  paper_positions?: ApiRecord[]
+  paper_trades?: ApiRecord[]
+  report?: ApiRecord | null
+  runs?: ApiRecord[]
+  validations?: ApiRecord[]
+  performance?: ApiRecord[]
+  theme_heat_meta?: ApiRecord | null
+  theme_heat_methodology?: ApiRecord | null
+  theme_heat?: ApiRecord[]
+}
+
 type ThemeHeatRow = TableRow & {
   theme: string
   count: number
@@ -149,8 +167,12 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
+function isApiRecord(value: unknown): value is ApiRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function asRecordArray(value: unknown): ApiRecord[] {
-  return Array.isArray(value) ? value.filter((item): item is ApiRecord => typeof item === 'object' && item !== null && !Array.isArray(item)) : []
+  return Array.isArray(value) ? value.filter(isApiRecord) : []
 }
 
 function strategyLabel(value: string): string {
@@ -159,6 +181,95 @@ function strategyLabel(value: string): string {
 
 function percentValue(value: unknown): string {
   return `${asNumber(value)}%`
+}
+
+function normalizePaperSummary(value: ApiRecord | null | undefined): ApiRecord | null {
+  if (!value) return null
+  const portfolio = isApiRecord(value.portfolio) ? value.portfolio : null
+  return portfolio ? { ...value, ...portfolio } : value
+}
+
+function dashboardOverviewToData(payload: DashboardOverviewPayload): DashboardData {
+  return {
+    meta: payload.meta || null,
+    market: payload.market || null,
+    signals: asRecordArray(payload.signals),
+    candidates: asRecordArray(payload.candidates),
+    portfolioPlan: payload.portfolio_plan || null,
+    paperSummary: normalizePaperSummary(payload.paper_summary),
+    paperPositions: asRecordArray(payload.paper_positions),
+    paperTrades: asRecordArray(payload.paper_trades),
+    report: payload.report || null,
+    runs: asRecordArray(payload.runs),
+    validations: asRecordArray(payload.validations),
+    performance: asRecordArray(payload.performance),
+    themeHeatMeta: payload.theme_heat_meta || null,
+    themeHeatMethodology: payload.theme_heat_methodology || null,
+    themeHeat: asRecordArray(payload.theme_heat),
+  }
+}
+
+async function loadLegacyDashboardData(): Promise<DashboardData> {
+  const openApi = await fetchApi<{ paths?: Record<string, unknown> }>('/openapi.json')
+  const paths = openApi?.paths || {}
+  const hasPath = (path: string) => Boolean(paths[path])
+
+  const [
+    meta,
+    market,
+    signals,
+    candidates,
+    portfolioPlan,
+    paperSummary,
+    paperPositions,
+    paperTrades,
+    report,
+    runs,
+    validations,
+    performance,
+    themeHeatPayload,
+  ] = await Promise.all([
+    fetchApi<ApiRecord | null>('/api/meta', null),
+    fetchApi<ApiRecord | null>('/api/market/overview', null),
+    fetchApi<ApiRecord[]>('/api/signals', []),
+    hasPath('/api/candidates') ? fetchApi<ApiRecord[]>('/api/candidates', []) : Promise.resolve([]),
+    hasPath('/api/portfolio-plan') ? fetchApi<ApiRecord | null>('/api/portfolio-plan', null) : Promise.resolve(null),
+    hasPath('/api/paper/summary') ? fetchApi<ApiRecord | null>('/api/paper/summary', null) : Promise.resolve(null),
+    hasPath('/api/paper/positions') ? fetchApi<ApiRecord[]>('/api/paper/positions', []) : Promise.resolve([]),
+    hasPath('/api/paper/trades') ? fetchApi<ApiRecord[]>('/api/paper/trades', []) : Promise.resolve([]),
+    fetchApi<ApiRecord | null>('/api/report/daily', null),
+    fetchApi<ApiRecord[]>('/api/history/runs', []),
+    fetchApi<ApiRecord[]>('/api/history/validations', []),
+    fetchApi<ApiRecord[]>('/api/analytics/strategy-performance', []),
+    fetchApi<ThemeHeatPayload>('/api/themes/heat', { items: [] }),
+  ])
+
+  return {
+    meta,
+    market,
+    signals,
+    candidates,
+    portfolioPlan,
+    paperSummary: normalizePaperSummary(paperSummary),
+    paperPositions,
+    paperTrades,
+    report,
+    runs,
+    validations,
+    performance,
+    themeHeatMeta: themeHeatPayload.meta || null,
+    themeHeatMethodology: themeHeatPayload.methodology || null,
+    themeHeat: themeHeatPayload.items || [],
+  }
+}
+
+async function loadDashboardData(): Promise<DashboardData> {
+  try {
+    const payload = await fetchApi<DashboardOverviewPayload>('/api/dashboard/overview')
+    return dashboardOverviewToData(payload)
+  } catch {
+    return loadLegacyDashboardData()
+  }
 }
 
 export default function Page() {
@@ -176,59 +287,11 @@ export default function Page() {
       setError('')
 
       try {
-        const openApi = await fetchApi<{ paths?: Record<string, unknown> }>('/openapi.json')
-        const paths = openApi?.paths || {}
-        const hasPath = (path: string) => Boolean(paths[path])
-
-        const [
-          meta,
-          market,
-          signals,
-          candidates,
-          portfolioPlan,
-          paperSummary,
-          paperPositions,
-          paperTrades,
-          report,
-          runs,
-          validations,
-          performance,
-          themeHeatPayload,
-        ] = await Promise.all([
-          fetchApi<ApiRecord | null>('/api/meta', null),
-          fetchApi<ApiRecord | null>('/api/market/overview', null),
-          fetchApi<ApiRecord[]>('/api/signals', []),
-          hasPath('/api/candidates') ? fetchApi<ApiRecord[]>('/api/candidates', []) : Promise.resolve([]),
-          hasPath('/api/portfolio-plan') ? fetchApi<ApiRecord | null>('/api/portfolio-plan', null) : Promise.resolve(null),
-          hasPath('/api/paper/summary') ? fetchApi<ApiRecord | null>('/api/paper/summary', null) : Promise.resolve(null),
-          hasPath('/api/paper/positions') ? fetchApi<ApiRecord[]>('/api/paper/positions', []) : Promise.resolve([]),
-          hasPath('/api/paper/trades') ? fetchApi<ApiRecord[]>('/api/paper/trades', []) : Promise.resolve([]),
-          fetchApi<ApiRecord | null>('/api/report/daily', null),
-          fetchApi<ApiRecord[]>('/api/history/runs', []),
-          fetchApi<ApiRecord[]>('/api/history/validations', []),
-          fetchApi<ApiRecord[]>('/api/analytics/strategy-performance', []),
-          fetchApi<ThemeHeatPayload>('/api/themes/heat', { items: [] }),
-        ])
+        const dashboardData = await loadDashboardData()
 
         if (ignore) return
 
-        setData({
-          meta,
-          market,
-          signals,
-          candidates,
-          portfolioPlan,
-          paperSummary,
-          paperPositions,
-          paperTrades,
-          report,
-          runs,
-          validations,
-          performance,
-          themeHeatMeta: themeHeatPayload.meta || null,
-          themeHeatMethodology: themeHeatPayload.methodology || null,
-          themeHeat: themeHeatPayload.items || [],
-        })
+        setData(dashboardData)
       } catch (err) {
         if (!ignore) {
           setError(err instanceof Error ? err.message : apiConnectionError().message)
