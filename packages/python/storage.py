@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-DB_DIR = Path("/tmp/quant-harness/runtime") if os.getenv("VERCEL") else ROOT / "data" / "runtime"
+RUNTIME_DIR = os.getenv("QUANT_HARNESS_RUNTIME_DIR")
+DB_DIR = Path(RUNTIME_DIR) if RUNTIME_DIR else Path("/tmp/quant-harness/runtime") if os.getenv("VERCEL") else ROOT / "data" / "runtime"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DB_DIR / "quant_harness.db"
 

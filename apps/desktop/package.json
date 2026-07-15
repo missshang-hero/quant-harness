@@ -1,0 +1,60 @@
+{
+  "name": "quant-harness-desktop",
+  "version": "0.1.0",
+  "description": "极投雷达 macOS desktop app",
+  "author": "Hero",
+  "private": true,
+  "productName": "极投雷达",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build:web": "npm --prefix ../web run build:desktop",
+    "prepare:api": "cd ../.. && python3 -m venv apps/api/.venv && apps/api/.venv/bin/python -m pip install -r apps/api/requirements.txt",
+    "pack:mac": "npm run prepare:api && npm run build:web && electron-builder --mac --dir",
+    "dist:mac": "npm run prepare:api && npm run build:web && electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.hero.quant-harness",
+    "productName": "极投雷达",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../..",
+        "to": "quant-harness",
+        "filter": [
+          "apps/api/**",
+          "apps/web/out/**",
+          "packages/**",
+          "data/sample/**",
+          "reports/daily/**",
+          "requirements.txt",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!apps/api/.venv/**",
+          "!apps/web/node_modules/**",
+          "!apps/web/.next/**"
+        ]
+      },
+      {
+        "from": "../api/.venv",
+        "to": "quant-harness/apps/api/.venv",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.finance"
+    }
+  }
+}

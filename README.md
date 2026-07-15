@@ -42,6 +42,33 @@ npm run dev
 - 前端：http://localhost:3010
 - 后端健康检查：http://127.0.0.1:8010/health
 
+## macOS 桌面端
+
+桌面端使用 Electron 承载现有 Next.js 页面，并在本机自动启动 FastAPI 后端。
+
+首次安装桌面端依赖：
+
+```bash
+cd /Users/hero/Documents/quant-harness/apps/desktop
+npm install
+```
+
+开发模式启动：
+
+```bash
+cd /Users/hero/Documents/quant-harness/apps/desktop
+npm run dev
+```
+
+打包 macOS `.app`：
+
+```bash
+cd /Users/hero/Documents/quant-harness/apps/desktop
+npm run pack:mac
+```
+
+打包前脚本会准备 Python venv、导出静态前端，并把 `apps/api`、`packages`、样本数据和前端静态产物一起放进应用资源。桌面端运行时数据库和日报会写到 macOS 用户数据目录，而不是写进 `.app` 包内部。
+
 ## 线上部署
 
 前端项目环境变量：

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3010",
     "build": "next build",
+    "build:desktop": "NEXT_DESKTOP_EXPORT=1 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8010 next build",
     "start": "next start -p 3010"
   },
   "dependencies": {
